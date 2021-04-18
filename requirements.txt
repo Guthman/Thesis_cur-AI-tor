@@ -1,0 +1,9 @@
+jupyter
+opencv
+skimage
+pylab
+scikit-image~=0.18.1
+numpy~=1.20.2
+cpbd~=1.0.7
+webcolors~=1.11.1
+scipy~=1.6.2
