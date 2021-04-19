@@ -15,3 +15,4 @@ google-cloud-bigquery
 pywavelets
 # git+https://github.com/mertyyanik/pyleargist-python3.git
 tqdm
+tqdm
