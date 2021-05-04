@@ -1,4 +1,5 @@
 import cv2
+import pywt
 import skimage.measure
 import imquality.brisque as brisque
 import webcolors as wc
@@ -18,6 +19,9 @@ import cpbd
 # TODO: check correlation between k_complexity_bw() and k_complexity_lightness() (better yet, check all correlations)
 # TODO: wrt to the k_complexity functions, is the metric of 2D array sufficiently correlated with its 1D version?
 
+# TODO: https://onlinelibrary.wiley.com/doi/abs/10.1111/j.1467-8659.2011.01900.x?casa_token=VU-te9nefM8AAAAA%3AqcRGedXRra5yodIDCXAUdS3m1mHCIyxaui2IsbWiB2Iq2S3xNnRs1xb6GMf7um2foQNzBIxFrg8rdTM
+# TODO: https://ieeexplore.ieee.org/document/5995467
+
 
 def contrast_rms(image):
     # Returns RMS contrast
@@ -31,24 +35,6 @@ def contrast_tenengrad(image):
     image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     sobel_img = sobel(image) ** 2
     return np.sqrt(np.sum(sobel_img)) / image.size
-
-
-def pixel_intensity_mean(image):
-    return image.mean()
-
-
-def hue_mean(image):
-    return cv2.cvtColor(image, cv2.COLOR_BGR2HSV).mean()
-
-
-def saturation_mean(image):
-    img_hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-    saturation = img_hsv[:, :, 1].mean()
-    return saturation
-
-
-def entropy_shannon(image):
-    return skimage.measure.shannon_entropy(image)
 
 
 def fractal_dimension(image):
@@ -142,6 +128,29 @@ def colorfulness(image):
     mean_root = np.sqrt((rbMean ** 2) + (ybMean ** 2))
     return std_root + (0.3 * mean_root)
 
+# First order
+
+
+def pixel_intensity_mean(image):
+    return image.mean()
+
+
+def hue_mean(image):
+    return cv2.cvtColor(image, cv2.COLOR_BGR2HSV).mean()
+
+
+def saturation_mean(image):
+    img_hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+    saturation = img_hsv[:, :, 1].mean()
+    return saturation
+
+
+# Second order
+
+# Higher order
+def entropy_shannon(image):
+    return skimage.measure.shannon_entropy(image)
+
 
 def k_complexity_bw(image):
     image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
@@ -184,3 +193,7 @@ def k_complexity_lab_b(image):
     image = np.digitize(image, bins=bins)-1
     bdm = BDM(ndim=1, nsymbols=9, warn_if_missing_ctm=False)
     return bdm.bdm(image)
+
+
+def haar_wavelet(image):
+    return pywt.dwt2(image, 'Haar')
