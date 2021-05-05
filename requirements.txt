@@ -8,11 +8,11 @@ cpbd~=1.0.7
 webcolors~=1.11.1
 scipy~=1.6.2
 pybdm~=0.1.0
-webdataset
-torchvision
+# webdataset
+# torchvision
 ujson
-google-cloud-bigquery
+numba
+image-quality
 pywavelets
 # git+https://github.com/mertyyanik/pyleargist-python3.git
-tqdm
 tqdm

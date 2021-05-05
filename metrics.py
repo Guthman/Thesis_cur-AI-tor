@@ -34,7 +34,7 @@ def contrast_tenengrad(image):
     # Returns tenengrad contrast
     image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     sobel_img = sobel(image) ** 2
-    return np.sqrt(np.sum(sobel_img)) / image.size
+    return np.sqrt(np.sum(sobel_img)) / image.size * 10000
 
 
 def fractal_dimension(image):
@@ -50,7 +50,7 @@ def fractal_dimension(image):
 
     lx = image.shape[1]
     ly = image.shape[0]
-    pixels = pl.array(pixels)
+    pixels = np.array(pixels)
 
     # computing the fractal dimension
     # considering only scales in a logarithmic list
@@ -152,6 +152,11 @@ def entropy_shannon(image):
     return skimage.measure.shannon_entropy(image)
 
 
+from numba import jit
+
+
+# @jit(nopython=True, cache=True)
+@jit
 def k_complexity_bw(image):
     image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     image = image.reshape(image.shape[0]*image.shape[1])
@@ -196,4 +201,5 @@ def k_complexity_lab_b(image):
 
 
 def haar_wavelet(image):
+    image = image[::2, ::2]  # resize by factor 2
     return pywt.dwt2(image, 'Haar')
