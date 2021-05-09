@@ -9,7 +9,7 @@ from tqdm.contrib.concurrent import process_map
 # from tqdm.contrib.concurrent import thread_map
 from threading import get_ident
 
-files = glob.glob('E:/temp/thesisdata/micro_dataset1/*.*')[:6]
+files = glob.glob('E:/temp/thesisdata/micro_dataset1/*.*')
 
 
 def calculate_metrics(image):
@@ -28,4 +28,4 @@ def calculate_metrics(image):
 
 if __name__ == '__main__':
     # r = thread_map(calculate_metrics, files, max_workers=12, chunksize=5)
-    r = process_map(calculate_metrics, files, max_workers=6, chunksize=2)
+    r = process_map(calculate_metrics, files, max_workers=6, chunksize=1)

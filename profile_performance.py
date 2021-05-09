@@ -1,26 +1,17 @@
-import glob
-# import os
 from cv2 import imread
-import metrics
+import metrics_numba as metrics
 import ujson
-# from concurrent.futures import ProcessPoolExecutor
-from tqdm.contrib.concurrent import process_map
-from tqdm.contrib.concurrent import thread_map
 from threading import get_ident
 import warnings
 import pickle
+from tqdm.auto import tqdm
 
 warnings.filterwarnings('ignore')
-
-# files = glob.glob('C:/Users/Rodney/Desktop/saatchi/saatchi/*.*')
-# with open('files.pkl', 'wb') as f:
-#     pickle.dump(files, f)
 
 with open('files.pkl', 'rb') as f:
     files = pickle.load(f)
 
-
-def calculate_metrics(image):
+for image in tqdm(files[:36]):
     img = imread(image)
     with open(f'./calculated_metrics/macro_dataset1_all_except_brisque_shannon_kcomplexity_{get_ident()}.json', 'a') as file:
         file.write(
@@ -43,10 +34,5 @@ def calculate_metrics(image):
                         # 'k_complexity_lab_a': str(round(metrics.k_complexity_lab_a(img), 4)),
                         # 'k_complexity_lab_b': str(round(metrics.k_complexity_lab_b(img), 4))
                     }
-                 }
+                }
             ) + ',\n')
-
-
-if __name__ == '__main__':
-    # r = thread_map(calculate_metrics, files, max_workers=10, chunksize=1)
-    r = process_map(calculate_metrics, files[:36], max_workers=12, chunksize=10)

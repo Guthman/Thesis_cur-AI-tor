@@ -5,7 +5,9 @@ import imquality.brisque as brisque
 import webcolors as wc
 from skimage.filters import sobel
 from pybdm import BDM
+import pylab as pl
 import numpy as np
+from numba import jit
 import sys
 
 # The cpbd module tries to import scipy.ndimage.imread, which does not exist. This line below is a fix for this issue.
@@ -22,10 +24,62 @@ import cpbd
 # TODO: https://ieeexplore.ieee.org/document/5995467
 
 
-# Utility vars  & functions
+# Utility vars & functions
+numba_parallel = True
+numba_cache = True
 scales = np.logspace(0.01, 1, num=10, endpoint=False, base=2)
 bins_0_252 = list(range(0, 252, 28))
 bins_0_0_9 = list(np.arange(0, 0.9, 0.1))
+
+
+@jit(nopython=True, cache=numba_cache, parallel=numba_parallel)
+def nb_digitize(x):
+    return np.digitize(x)-1
+
+
+@jit(nopython=True, cache=numba_cache, parallel=numba_parallel)
+def nb_colorfulness_helper(R, G, B):
+    rg = np.absolute(R - G)
+    yb = np.absolute(0.5 * (R + G) - B)
+    (rbMean, rbStd) = (np.mean(rg), np.std(rg))
+    (ybMean, ybStd) = (np.mean(yb), np.std(yb))
+    std_root = np.sqrt((rbStd ** 2) + (ybStd ** 2))
+    mean_root = np.sqrt((rbMean ** 2) + (ybMean ** 2))
+    return std_root + (0.3 * mean_root)
+
+
+# @jit(nopython=True, cache=numba_cache, parallel=numba_parallel)
+@jit(cache=numba_cache)
+def nb_fractal_dimension_helper(image):
+    pixels = []
+    for i in range(image.shape[0]):
+        for j in range(image.shape[1]):
+            if image[i, j] > 0:
+                pixels.append((i, j))
+
+    lx = image.shape[1]
+    ly = image.shape[0]
+    pixels = np.array(pixels)
+
+    # computing the fractal dimension
+    # considering only scales in a logarithmic list
+
+    ns = []
+    # looping over several scales
+    for scale in scales:
+        # computing the histogram
+        # h, edges = np.histogramdd(pixels, bins=(np.arange(0, lx, scale), np.arange(0, ly, scale)))
+        h = nb_fractal_dimension_helper_helper(pixels, lx, ly, scale)
+        ns.append(np.sum(h > 0))
+
+    # linear fit, polynomial of degree 1
+    coeffs = np.polyfit(np.log(scales), np.log(ns), 1)
+    return -coeffs[0]  # the fractal dimension is the OPPOSITE of the fitting coefficient
+
+
+def nb_fractal_dimension_helper_helper(pixels, lx, ly, scale):
+    h, edges = np.histogramdd(pixels, bins=(np.arange(0, lx, scale), np.arange(0, ly, scale)))
+    return h
 
 
 def contrast_rms(image):
@@ -46,31 +100,32 @@ def fractal_dimension(image):
     # Adapted from https://francescoturci.net/2016/03/31/box-counting-in-numpy/
     image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
-    # finding all the non-zero pixels
-    pixels = []
-    for i in range(image.shape[0]):
-        for j in range(image.shape[1]):
-            if image[i, j] > 0:
-                pixels.append((i, j))
-
-    lx = image.shape[1]
-    ly = image.shape[0]
-    pixels = np.array(pixels)
-
-    # computing the fractal dimension
-    # considering only scales in a logarithmic list
+    # # finding all the non-zero pixels
+    # pixels = []
+    # for i in range(image.shape[0]):
+    #     for j in range(image.shape[1]):
+    #         if image[i, j] > 0:
+    #             pixels.append((i, j))
+    #
+    # lx = image.shape[1]
+    # ly = image.shape[0]
+    # pixels = np.array(pixels)
+    #
+    # # computing the fractal dimension
+    # # considering only scales in a logarithmic list
     # scales = np.logspace(0.01, 1, num=10, endpoint=False, base=2)
-    ns = []
-    # looping over several scales
-    for scale in scales:
-        # computing the histogram
-        h, edges = np.histogramdd(pixels, bins=(np.arange(0, lx, scale), np.arange(0, ly, scale)))
-        ns.append(np.sum(h > 0))
-
-    # linear fit, polynomial of degree 1
-    coeffs = np.polyfit(np.log(scales), np.log(ns), 1)
-
-    return -coeffs[0]  # the fractal dimension is the OPPOSITE of the fitting coefficient
+    # ns = []
+    # # looping over several scales
+    # for scale in scales:
+    #     # computing the histogram
+    #     h, edges = np.histogramdd(pixels, bins=(np.arange(0, lx, scale), np.arange(0, ly, scale)))
+    #     ns.append(np.sum(h > 0))
+    #
+    # # linear fit, polynomial of degree 1
+    # coeffs = np.polyfit(np.log(scales), np.log(ns), 1)
+    #
+    # return -coeffs[0]  # the fractal dimension is the OPPOSITE of the fitting coefficient
+    return nb_fractal_dimension_helper(image)
 
 
 def sharpness(image):
@@ -116,6 +171,7 @@ def color_dominant(image):
     rgb_ = bgr_
     rgb_[0], rgb_[2] = bgr_[2], bgr_[0]  # convert BGR to RGB
     hex_ = wc.rgb_to_hex(tuple(rgb_))
+
     return get_color_name(hex_)
 
 
@@ -124,13 +180,14 @@ def colorfulness(image):
     # "Measuring colourfulness in natural images" David Hasler and Sabine Susstrunk
     # split the image into its respective RGB components
     (B, G, R) = cv2.split(image.astype('float'))
-    rg = np.absolute(R - G)
-    yb = np.absolute(0.5 * (R + G) - B)
-    (rbMean, rbStd) = (np.mean(rg), np.std(rg))
-    (ybMean, ybStd) = (np.mean(yb), np.std(yb))
-    std_root = np.sqrt((rbStd ** 2) + (ybStd ** 2))
-    mean_root = np.sqrt((rbMean ** 2) + (ybMean ** 2))
-    return std_root + (0.3 * mean_root)
+    # rg = np.absolute(R - G)
+    # yb = np.absolute(0.5 * (R + G) - B)
+    # (rbMean, rbStd) = (np.mean(rg), np.std(rg))
+    # (ybMean, ybStd) = (np.mean(yb), np.std(yb))
+    # std_root = np.sqrt((rbStd ** 2) + (ybStd ** 2))
+    # mean_root = np.sqrt((rbMean ** 2) + (ybMean ** 2))
+    # return std_root + (0.3 * mean_root)
+    return nb_colorfulness_helper(R, G, B)
 
 # First order
 
@@ -160,8 +217,9 @@ def k_complexity_bw(image):
     image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     image = image.reshape(image.shape[0]*image.shape[1])
     image = image*(252/256)
-    bins = list(range(0, 252, 28))
-    image = np.digitize(image, bins=bins_0_252)-1
+    # bins = list(range(0, 252, 28))
+    image = nb_digitize(image, bins=bins_0_252)
+    # image = np.digitize(image, bins=bins)-1
     bdm = BDM(ndim=1, nsymbols=9, warn_if_missing_ctm=False)
     return bdm.bdm(image)
 
@@ -172,7 +230,8 @@ def k_complexity_lab_l(image):
     image = image[:, :, 0]
     image = image.reshape(image.shape[0]*image.shape[1])
     # bins = list(np.arange(0, 0.9, 0.1))
-    image = np.digitize(image, bins=bins_0_0_9)-1
+    image = nb_digitize(image, bins=bins_0_0_9)
+    # image = np.digitize(image, bins=bins)-1
     bdm = BDM(ndim=1, nsymbols=9, warn_if_missing_ctm=False)
     return bdm.bdm(image)
 
@@ -183,25 +242,22 @@ def k_complexity_lab_a(image):
     image = image[:, :, 1]
     image = image.reshape(image.shape[0]*image.shape[1])
     # bins = list(np.arange(0, 0.9, 0.1))
-    image = np.digitize(image, bins=bins_0_0_9)-1
+    image = nb_digitize(image, bins=bins_0_0_9)
+    # image = np.digitize(image, bins=bins)-1
     bdm = BDM(ndim=1, nsymbols=9, warn_if_missing_ctm=False)
     return bdm.bdm(image)
 
 
 def k_complexity_lab_b(image):
-    try:
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2Lab)
-        image = image.astype('float32') / 255  # transformation to fix Euclidian distances in Lab space
-        image = image[:, :, 2]
-        image = image.reshape(image.shape[0]*image.shape[1])
-        # bins = list(np.arange(0, 0.9, 0.1))
-        image = np.digitize(image, bins=bins_0_0_9)-1
-        bdm = BDM(ndim=1, nsymbols=9, warn_if_missing_ctm=False)
-        out = bdm.bdm(image)
-    except:
-        print('Error')
-        out = -999
-    return out
+    image = cv2.cvtColor(image, cv2.COLOR_BGR2Lab)
+    image = image.astype('float32') / 255  # transformation to fix Euclidian distances in Lab space
+    image = image[:, :, 2]
+    image = image.reshape(image.shape[0]*image.shape[1])
+    # bins = list(np.arange(0, 0.9, 0.1))
+    image = nb_digitize(image, bins=bins_0_0_9)
+    # image = np.digitize(image, bins=bins)-1
+    bdm = BDM(ndim=1, nsymbols=9, warn_if_missing_ctm=False)
+    return bdm.bdm(image)
 
 
 def haar_wavelet(image):
