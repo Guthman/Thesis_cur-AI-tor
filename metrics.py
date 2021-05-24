@@ -89,6 +89,8 @@ def brisque_score(image):
 
 
 def color_dominant(image):
+    # TODO: Re-implement with Colorthief:
+    #  https://stackoverflow.com/questions/3241929/python-find-dominant-most-common-color-in-an-image
 
     def get_approx_color(hex_color):
         orig = wc.hex_to_rgb(hex_color)
