@@ -1,3 +1,4 @@
+pandas
 jupyter
 opencv
 skimage
@@ -16,3 +17,5 @@ image-quality
 pywavelets
 # git+https://github.com/mertyyanik/pyleargist-python3.git
 tqdm
+lightning-bolts
+scikit-learn
