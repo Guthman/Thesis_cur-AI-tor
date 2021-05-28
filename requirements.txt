@@ -20,3 +20,4 @@ tqdm
 lightning-bolts
 scikit-learn
 xgboost
+requests
