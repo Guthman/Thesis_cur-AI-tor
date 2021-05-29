@@ -1,0 +1,1 @@
+tensorboard --logdir=C:\Users\R\PycharmProjects\Thesis_cur-AI-tor\notebooks\lightning_logs\version_40
