@@ -2,6 +2,7 @@ import ujson as json
 import pandas as pd
 import pytorch_lightning as pl
 import requests
+import numpy as np
 
 import torch
 from torch.utils.data import Dataset, DataLoader
@@ -187,9 +188,20 @@ class SaatchiMLP(pl.LightningModule):
         x, y = batch
         x = x.view(x.size(0), -1)
         y_hat = self.layers(x)
-        print(f'y = {y.detach().numpy()}; y_hat = {y_hat.detach().numpy()}')
         loss = self.ce(y_hat, y)
         self.log('train_loss', loss)
+
+        # Logic for calculating and printing accuracy
+        step_counter.increment()
+        if step_counter.step_count % 50 == 0:
+
+            pred = np.array([x.argmax() for x in y_hat.detach().numpy()])
+            y_ = y.detach().numpy()
+            correct_preds = np.sum(y_ == pred)
+            acc = round(correct_preds / y_.shape[0], 1)
+            # print(f'y_hat = {y_hat}; y = {y}')
+            print(f'Accuracy at step {step_counter.step_count}: {acc}')
+
         return loss
 
     def validation_step(self, batch, batch_idx):
@@ -221,19 +233,36 @@ class SaatchiMLP(pl.LightningModule):
         return [optimizer], [scheduler]
 
 
+class StepCounter(object):
+    def __init__(self):
+        self.step_count = 0
+
+    def increment(self):
+        self.step_count = self.step_count + 1
+
+    @property
+    def get_step_count(self):
+        return self.step_count
+
+step_counter = StepCounter()
+
 saatchi_data = SaatchiDataModule(target_selection='price',
-                                 batch_size=64,
+                                 batch_size=128,
                                  num_workers=1)
+
+num_sanity_val_steps = 0
+num_processes = 1
 
 saatchi_mlp = SaatchiMLP()
 
 trainer = pl.Trainer(auto_scale_batch_size='power',
-                     gpus=gpus,
+                     gpus=0,
                      deterministic=True,
-                     logger=logger,
-                     max_epochs=num_epochs,
+                     max_epochs=5,
                      num_sanity_val_steps=num_sanity_val_steps,
                      num_processes=num_processes)
+
+# trainer.fit(saatchi_mlp, saatchi_data)
 
 
 def train():
