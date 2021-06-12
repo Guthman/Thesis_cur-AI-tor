@@ -91,7 +91,7 @@ class SaatchiDataset(Dataset):
             self.targets_ = dataset['LIKES_VIEWS_RATIO'].values
         else:
             print(
-                f'Invalid target selection specified: "{target_selection}" , valid options are: [price, likes_view_ratio].')
+                f'Invalid target selection specified: "{target_selection}", valid options are: [price, likes_view_ratio].')
 
     def __getitem__(self, index):
         return torch.as_tensor(self.data_[index]), torch.as_tensor(self.targets_[index]).unsqueeze(-1)

@@ -4,7 +4,13 @@ import SimpleITK as sitk
 from PIL import Image, ImageCms
 import traceback
 
+# Settings
+enabled_feature_classes = ['firstorder', 'glcm', 'glrlm', 'glszm', 'gldm', 'ngtdm']
 extractor = featureextractor.RadiomicsFeatureExtractor()
+extractor.settings.update({'voxelBatch ': 100})
+extractor.disableAllFeatures()
+for feature_class in enabled_feature_classes:
+    extractor.enableFeatureClassByName(feature_class)
 
 
 def load_image(input_path: str):
@@ -46,7 +52,9 @@ def full_image_metrics(image: np.array):
     ma.CopyInformation(im)
 
     # Extract features into clean dict
+    ic()
     features = extractor.execute(im, ma, label=1)
-    stats_keys = [x for x in list(features.keys()) if x[0][0] == 'o']
-    stats_dict = {k[9:]: float(features[k]) for k in stats_keys}
+    ic()
+    stats_keys = [x for x in list(features.keys()) if x[0][0] == 'o']  # Remove not needed stats
+    stats_dict = {k[9:]: float(features[k]) for k in stats_keys}  # Remove prefix
     return stats_dict
