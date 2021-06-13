@@ -18,7 +18,7 @@ import cpbd
 # TODO: check correlation between k_complexity_bw() and k_complexity_lightness() (better yet, check all correlations)
 # TODO: wrt to the k_complexity functions, is the metric of 2D array sufficiently correlated with its 1D version?
 
-# TODO: https://onlinelibrary.wiley.com/doi/abs/10.1111/j.1467-8659.2011.01900.x?casa_token=VU-te9nefM8AAAAA%3AqcRGedXRra5yodIDCXAUdS3m1mHCIyxaui2IsbWiB2Iq2S3xNnRs1xb6GMf7um2foQNzBIxFrg8rdTM
+# TODO: https://onlinelibrary.wiley.com/doi/abs/10.1111/j.1467-8659.2011.01900.x
 # TODO: https://ieeexplore.ieee.org/document/5995467
 
 
@@ -30,21 +30,24 @@ bins_0_0_9 = list(np.arange(0, 0.9, 0.1))
 
 def contrast_rms(image):
     # Returns RMS contrast
-    image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    if len(image.shape) == 3:
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     return image.std()
 
 
 # noinspection PyTypeChecker
 def contrast_tenengrad(image):
     # Returns tenengrad contrast
-    image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    if len(image.shape) == 3:
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     sobel_img = sobel(image) ** 2
     return np.sqrt(np.sum(sobel_img)) / image.size * 10000
 
 
 def fractal_dimension(image):
     # Adapted from https://francescoturci.net/2016/03/31/box-counting-in-numpy/
-    image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    if len(image.shape) == 3:
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
     # finding all the non-zero pixels
     pixels = []
@@ -75,12 +78,14 @@ def fractal_dimension(image):
 
 def sharpness(image):
     # https://pypi.org/project/cpbd/
-    image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    if len(image.shape) == 3:
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     return cpbd.compute(image)
 
 
 def sharpness_laplacian(image):
-    image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    if len(image.shape) == 3:
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     return cv2.Laplacian(image, cv2.CV_64F).var()
 
 
@@ -158,11 +163,20 @@ def entropy_shannon(image):
     return skimage.measure.shannon_entropy(image)
 
 
+def k_complexity(image):
+    assert image.shape[2] == 1
+    image = image*(252/256)
+    # bins = list(range(0, 252, 28))
+    image = np.digitize(image, bins=bins_0_252)-1
+    bdm = BDM(ndim=1, nsymbols=9, warn_if_missing_ctm=False)
+    return bdm.bdm(image)
+
+
 def k_complexity_bw(image):
     image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     image = image.reshape(image.shape[0]*image.shape[1])
     image = image*(252/256)
-    bins = list(range(0, 252, 28))
+    # bins = list(range(0, 252, 28))
     image = np.digitize(image, bins=bins_0_252)-1
     bdm = BDM(ndim=1, nsymbols=9, warn_if_missing_ctm=False)
     return bdm.bdm(image)
@@ -191,18 +205,14 @@ def k_complexity_lab_a(image):
 
 
 def k_complexity_lab_b(image):
-    try:
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2Lab)
-        image = image.astype('float32') / 255  # transformation to fix Euclidian distances in Lab space
-        image = image[:, :, 2]
-        image = image.reshape(image.shape[0]*image.shape[1])
-        # bins = list(np.arange(0, 0.9, 0.1))
-        image = np.digitize(image, bins=bins_0_0_9)-1
-        bdm = BDM(ndim=1, nsymbols=9, warn_if_missing_ctm=False)
-        out = bdm.bdm(image)
-    except:
-        print('Error')
-        out = -999
+    image = cv2.cvtColor(image, cv2.COLOR_BGR2Lab)
+    image = image.astype('float32') / 255  # transformation to fix Euclidian distances in Lab space
+    image = image[:, :, 2]
+    image = image.reshape(image.shape[0]*image.shape[1])
+    # bins = list(np.arange(0, 0.9, 0.1))
+    image = np.digitize(image, bins=bins_0_0_9)-1
+    bdm = BDM(ndim=1, nsymbols=9, warn_if_missing_ctm=False)
+    out = bdm.bdm(image)
     return out
 
 

@@ -22,3 +22,5 @@ scikit-learn
 xgboost
 requests
 umap-learn
+pyradiomics
+icecream
