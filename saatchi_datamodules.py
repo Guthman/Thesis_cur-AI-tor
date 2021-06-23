@@ -96,6 +96,12 @@ class SaatchiImageDataset(Dataset):
             else:
                 # Only extract if folder doesn't exist yet
                 self.filelist = self.untar_images(self.path_to_image_tar, self.image_extraction_path)
+
+        # Remove files from filelist if there is no target information
+        # Somewhat convoluted because the target list does not contain the path and the filelist does
+        self.filenames_with_full_paths = {Path(file).name: file for file in self.filelist}
+        self.filename_list = list(set(self.filenames_with_full_paths.keys()).intersection(list(self.targets_df.index)))
+        self.filelist = [self.filenames_with_full_paths[file] for file in self.filename_list]
         shuffle(self.filelist)
 
         if self.limit_dataset_size_to is not None:
@@ -125,7 +131,7 @@ class SaatchiImageDataset(Dataset):
 
         elif self.stage == 'test':
             start_position = self.train_fraction + self.validation_fraction
-            end_position = len(self.data_) + 1
+            end_position = len(self.filelist) + 1
             self.data_ = self.filelist[start_position:end_position]
             self.class_composition = self.no_images_per_class(self.data_, self.targets_df)
             print(f'Test set image count: {len(self.data_)}')
@@ -134,9 +140,13 @@ class SaatchiImageDataset(Dataset):
     def __getitem__(self, index):
         path = self.data_[index]
         img = Image.open(path)
-        # Resize image if it's not the requested size TODO: warning or solution for when image is not square
+
+        # Resize and/or convert image if it's not in the right format
         if img.size != self.image_size:
             img = img.resize(self.image_size, Image.ANTIALIAS)
+        # if img.mode != 'RGB':
+        #     img = img.convert('RGB')
+
         image_tensor = self.transform(img)
         filename = Path(path).name
         target = self.targets_df.loc[filename][self.target_selection]
@@ -153,7 +163,7 @@ class SaatchiImageDataModule(pl.LightningDataModule):
                  target_selection: str = 'LIKES_VIEWS_RATIO_BIN_IDX',
                  source_selection: str = 'images',
                  data_format: str = 'archive',
-                 path_to_image_tar: str = './data/saatchi512.tar',
+                 path_to_image_tar: str = '',
                  image_extraction_path: str = './data/images/',
                  path_to_target_data: str = './data/saatchi_targets.csv',
                  image_size: int = 512,
@@ -163,9 +173,7 @@ class SaatchiImageDataModule(pl.LightningDataModule):
                  ):
         super().__init__()
         self.batch_size = batch_size
-        self.data_train = None
-        self.data_validation = None
-        self.data_test = None
+        self.data_ = None
         self.num_workers = num_workers
         self.target_selection = target_selection
         self.source_selection = source_selection
@@ -182,39 +190,39 @@ class SaatchiImageDataModule(pl.LightningDataModule):
         pass
 
     def setup(self, stage: str = None):
-        if stage == 'fit':
-            self.data_train = SaatchiImageDataset(stage='train',
-                                                  target_selection=self.target_selection,
-                                                  source_selection=self.source_selection,
-                                                  image_extraction_path=self.image_extraction_path,
-                                                  path_to_target_data=self.path_to_target_data,
-                                                  data_format=self.data_format,
-                                                  path_to_image_tar=self.path_to_image_tar,
-                                                  image_size=self.image_size,
-                                                  limit_dataset_size_to=self.limit_dataset_size_to)
-        elif stage == 'validation':
-            self.data_validation = SaatchiImageDataset(stage='validation',
-                                                       target_selection=self.target_selection,
-                                                       source_selection=self.source_selection,
-                                                       image_extraction_path=self.image_extraction_path,
-                                                       path_to_target_data=self.path_to_target_data,
-                                                       data_format=self.data_format,
-                                                       path_to_image_tar=self.path_to_image_tar,
-                                                       image_size=self.image_size,
-                                                       limit_dataset_size_to=self.limit_dataset_size_to)
-        elif stage == 'test':
-            self.data_test = SaatchiImageDataset(stage='test',
-                                                 target_selection=self.target_selection,
-                                                 source_selection=self.source_selection,
-                                                 image_extraction_path=self.image_extraction_path,
-                                                 path_to_target_data=self.path_to_target_data,
-                                                 data_format=self.data_format,
-                                                 path_to_image_tar=self.path_to_image_tar,
-                                                 image_size=self.image_size,
-                                                 limit_dataset_size_to=self.limit_dataset_size_to)
+        if stage in ('fit', None):
+            self.data_ = SaatchiImageDataset(stage='train',
+                                             target_selection=self.target_selection,
+                                             source_selection=self.source_selection,
+                                             image_extraction_path=self.image_extraction_path,
+                                             path_to_target_data=self.path_to_target_data,
+                                             data_format=self.data_format,
+                                             path_to_image_tar=self.path_to_image_tar,
+                                             image_size=self.image_size,
+                                             limit_dataset_size_to=self.limit_dataset_size_to)
+        elif stage in ('validation', None):
+            self.data_ = SaatchiImageDataset(stage='validation',
+                                             target_selection=self.target_selection,
+                                             source_selection=self.source_selection,
+                                             image_extraction_path=self.image_extraction_path,
+                                             path_to_target_data=self.path_to_target_data,
+                                             data_format=self.data_format,
+                                             path_to_image_tar=self.path_to_image_tar,
+                                             image_size=self.image_size,
+                                             limit_dataset_size_to=self.limit_dataset_size_to)
+        elif stage in ('test', None):
+            self.data_ = SaatchiImageDataset(stage='test',
+                                             target_selection=self.target_selection,
+                                             source_selection=self.source_selection,
+                                             image_extraction_path=self.image_extraction_path,
+                                             path_to_target_data=self.path_to_target_data,
+                                             data_format=self.data_format,
+                                             path_to_image_tar=self.path_to_image_tar,
+                                             image_size=self.image_size,
+                                             limit_dataset_size_to=self.limit_dataset_size_to)
 
     def train_dataloader(self):
-        return DataLoader(self.data_train,
+        return DataLoader(self.data_,
                           batch_size=self.batch_size,
                           drop_last=True,
                           num_workers=self.num_workers,
@@ -223,7 +231,7 @@ class SaatchiImageDataModule(pl.LightningDataModule):
                           )
 
     def val_dataloader(self):
-        return DataLoader(self.data_validation,
+        return DataLoader(self.data_,
                           batch_size=self.batch_size,
                           drop_last=True,
                           num_workers=self.num_workers,
@@ -232,7 +240,7 @@ class SaatchiImageDataModule(pl.LightningDataModule):
                           )
 
     def test_dataloader(self):
-        return DataLoader(self.data_test,
+        return DataLoader(self.data_,
                           batch_size=self.batch_size,
                           drop_last=True,
                           num_workers=self.num_workers,

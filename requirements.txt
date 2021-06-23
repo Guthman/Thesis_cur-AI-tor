@@ -25,3 +25,4 @@ umap-learn
 pyradiomics
 icecream
 torchmetrics
+torch-optimizer
