@@ -24,3 +24,6 @@ requests
 umap-learn
 pyradiomics
 icecream
+albumentations
+seaborn
+hdbscan

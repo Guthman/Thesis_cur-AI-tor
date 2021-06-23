@@ -70,6 +70,8 @@ def resize_pad_crop_image(input_path: str,
             img = Image.open(input_path)
             if asarray(img).shape[0] < size_:
                 img = ImageOps.pad(img, (size_, size_))
+            elif asarray(img).shape[0] > size_:
+                img = ImageOps.fit(img, (size_, size_))
             img = asarray(img)
             img = cropper(image=img)
             full_output_path = output_path_ / filename
