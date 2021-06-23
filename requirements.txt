@@ -27,3 +27,4 @@ icecream
 albumentations
 seaborn
 hdbscan
+torchmetrics

@@ -5,7 +5,9 @@ from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
 from torch import as_tensor
 import tarfile
+from random import shuffle
 from glob import glob
+from collections import Counter
 from pathlib import Path
 
 
@@ -16,12 +18,22 @@ class SaatchiImageDataset(Dataset):
         self.dataset_tarfile = tarfile.open(path)
         self.dataset_tarfile.extractall(image_extraction_path)
         self.dataset_tarfile.close()
-        return glob(image_extraction_path + '/*/*')
+        return glob(image_extraction_path + '/**/*.jpg', recursive=True)
+
+    def no_images_per_class(self,
+                            filelist: list,
+                            targets: pd.DataFrame):
+        filelist = [Path(file).name for file in filelist]  # extract filename from full path
+        filenames_with_labels = {
+            filename: targets.loc[filename][self.target_selection] for filename in filelist}
+        class_composition = {f'Class {k}:': v for k, v in dict(Counter(filenames_with_labels.values())).items()}
+        return class_composition
 
     def __init__(self,
                  stage,
                  target_selection,
                  source_selection,
+                 data_format,
                  path_to_image_tar,
                  image_extraction_path,
                  path_to_target_data,
@@ -33,10 +45,11 @@ class SaatchiImageDataset(Dataset):
         self.path_to_image_tar = path_to_image_tar
         self.image_extraction_path = image_extraction_path
         self.path_to_target_data = path_to_target_data
+        self.data_format = data_format
         self.dataset_tarfile = None
         self.filelist = None
         self.image_size = (image_size, image_size)
-        self.split_fractions = {'train': 0.8, 'validation': 0.1, 'test': 0.1}
+        self.split_fractions = {'train': 0.7, 'validation': 0.15, 'test': 0.15}
         self.limit_dataset_size_to = limit_dataset_size_to
 
         # Load target data
@@ -52,6 +65,8 @@ class SaatchiImageDataset(Dataset):
         # Remove any duplicates
         self.targets_df = pd.DataFrame(
             self.targets_df.reset_index().drop_duplicates(subset=['FILENAME'])).set_index('FILENAME')
+        self.targets_df.dropna(inplace=True)
+        print(f'Target list length: {len(self.targets_df)}')
 
         # Validate arguments
         if stage not in ['train', 'validation', 'test']:
@@ -72,27 +87,49 @@ class SaatchiImageDataset(Dataset):
         )
 
         # Create dataset
-        if Path(image_extraction_path).exists():
-            print('Image extraction path already exists, using existing contents!')
-            self.filelist = glob(image_extraction_path + '/*/*')
+        if self.data_format != 'archive':
+            self.filelist = glob(image_extraction_path + '/**/*.jpg', recursive=True)
         else:
-            # Only extract if folder doesn't exist yet
-            self.filelist = self.untar_images(self.path_to_image_tar, self.image_extraction_path)
+            if Path(image_extraction_path).exists():
+                print('Image extraction path already exists, using existing contents!')
+                self.filelist = glob(image_extraction_path + '/**/*.jpg', recursive=True)
+            else:
+                # Only extract if folder doesn't exist yet
+                self.filelist = self.untar_images(self.path_to_image_tar, self.image_extraction_path)
+        shuffle(self.filelist)
 
         if self.limit_dataset_size_to is not None:
             self.filelist = self.filelist[:self.limit_dataset_size_to]
 
         # Calculate how many images belong in train, validation, and test
+        print(f'Total image count: {len(self.filelist)}')
         self.train_fraction = int(len(self.filelist) * self.split_fractions['train'])
         self.validation_fraction = int(len(self.filelist) * self.split_fractions['validation'])
         self.test_fraction = int(len(self.filelist) * self.split_fractions['test'])
 
         if self.stage == 'train':
-            self.data_ = self.filelist[:self.train_fraction]
+            start_position = 0
+            end_position = self.train_fraction
+            self.data_ = self.filelist[start_position:end_position]
+            self.class_composition = self.no_images_per_class(self.data_, self.targets_df)
+            print(f'Training set image count: {len(self.data_)}')
+            print(f'Images per class in training set: {self.class_composition}')
+
         elif self.stage == 'validation':
-            self.data_ = self.filelist[self.train_fraction:self.train_fraction + self.validation_fraction]
+            start_position = self.train_fraction
+            end_position = self.train_fraction + self.validation_fraction
+            self.data_ = self.filelist[start_position:end_position]
+            self.class_composition = self.no_images_per_class(self.data_, self.targets_df)
+            print(f'Validation set image count: {len(self.data_)}')
+            print(f'Images per class in validation set: {self.class_composition}')
+
         elif self.stage == 'test':
-            self.data_ = self.filelist[self.train_fraction + self.validation_fraction:]
+            start_position = self.train_fraction + self.validation_fraction
+            end_position = len(self.data_) + 1
+            self.data_ = self.filelist[start_position:end_position]
+            self.class_composition = self.no_images_per_class(self.data_, self.targets_df)
+            print(f'Test set image count: {len(self.data_)}')
+            print(f'Images per class in test set: {self.class_composition}')
 
     def __getitem__(self, index):
         path = self.data_[index]
@@ -115,15 +152,20 @@ class SaatchiImageDataModule(pl.LightningDataModule):
                  num_workers: int = 4,
                  target_selection: str = 'LIKES_VIEWS_RATIO_BIN_IDX',
                  source_selection: str = 'images',
+                 data_format: str = 'archive',
                  path_to_image_tar: str = './data/saatchi512.tar',
                  image_extraction_path: str = './data/images/',
                  path_to_target_data: str = './data/saatchi_targets.csv',
                  image_size: int = 512,
-                 limit_dataset_size_to: int = None
+                 limit_dataset_size_to: int = None,
+                 pin_memory: bool = False,
+                 persistent_workers: bool = False
                  ):
         super().__init__()
         self.batch_size = batch_size
-        self.data = None
+        self.data_train = None
+        self.data_validation = None
+        self.data_test = None
         self.num_workers = num_workers
         self.target_selection = target_selection
         self.source_selection = source_selection
@@ -132,50 +174,68 @@ class SaatchiImageDataModule(pl.LightningDataModule):
         self.path_to_target_data = path_to_target_data
         self.image_size = image_size
         self.limit_dataset_size_to = limit_dataset_size_to
+        self.data_format = data_format
+        self.pin_memory = pin_memory
+        self.persistent_workers = persistent_workers
 
     def prepare_data(self):
         pass
 
     def setup(self, stage: str = None):
         if stage == 'fit':
-            self.data = SaatchiImageDataset(stage='train',
-                                            target_selection=self.target_selection,
-                                            source_selection=self.source_selection,
-                                            image_extraction_path=self.image_extraction_path,
-                                            path_to_target_data=self.path_to_target_data,
-                                            path_to_image_tar=self.path_to_image_tar,
-                                            image_size=self.image_size,
-                                            limit_dataset_size_to=self.limit_dataset_size_to)
-        else:
-            self.data = SaatchiImageDataset(stage=stage,
-                                            target_selection=self.target_selection,
-                                            source_selection=self.source_selection,
-                                            image_extraction_path=self.image_extraction_path,
-                                            path_to_target_data=self.path_to_target_data,
-                                            path_to_image_tar=self.path_to_image_tar,
-                                            image_size=self.image_size,
-                                            limit_dataset_size_to=self.limit_dataset_size_to)
+            self.data_train = SaatchiImageDataset(stage='train',
+                                                  target_selection=self.target_selection,
+                                                  source_selection=self.source_selection,
+                                                  image_extraction_path=self.image_extraction_path,
+                                                  path_to_target_data=self.path_to_target_data,
+                                                  data_format=self.data_format,
+                                                  path_to_image_tar=self.path_to_image_tar,
+                                                  image_size=self.image_size,
+                                                  limit_dataset_size_to=self.limit_dataset_size_to)
+        elif stage == 'validation':
+            self.data_validation = SaatchiImageDataset(stage='validation',
+                                                       target_selection=self.target_selection,
+                                                       source_selection=self.source_selection,
+                                                       image_extraction_path=self.image_extraction_path,
+                                                       path_to_target_data=self.path_to_target_data,
+                                                       data_format=self.data_format,
+                                                       path_to_image_tar=self.path_to_image_tar,
+                                                       image_size=self.image_size,
+                                                       limit_dataset_size_to=self.limit_dataset_size_to)
+        elif stage == 'test':
+            self.data_test = SaatchiImageDataset(stage='test',
+                                                 target_selection=self.target_selection,
+                                                 source_selection=self.source_selection,
+                                                 image_extraction_path=self.image_extraction_path,
+                                                 path_to_target_data=self.path_to_target_data,
+                                                 data_format=self.data_format,
+                                                 path_to_image_tar=self.path_to_image_tar,
+                                                 image_size=self.image_size,
+                                                 limit_dataset_size_to=self.limit_dataset_size_to)
 
     def train_dataloader(self):
-        return DataLoader(self.data,
+        return DataLoader(self.data_train,
                           batch_size=self.batch_size,
                           drop_last=True,
                           num_workers=self.num_workers,
-                          pin_memory=True
+                          pin_memory=self.pin_memory,
+                          persistent_workers=self.persistent_workers
                           )
 
     def val_dataloader(self):
-        return DataLoader(self.data,
+        return DataLoader(self.data_validation,
                           batch_size=self.batch_size,
                           drop_last=True,
                           num_workers=self.num_workers,
-                          pin_memory=True
+                          pin_memory=self.pin_memory,
+                          persistent_workers=self.persistent_workers
                           )
 
     def test_dataloader(self):
-        return DataLoader(self.data,
+        return DataLoader(self.data_test,
                           batch_size=self.batch_size,
                           drop_last=True,
                           num_workers=self.num_workers,
-                          pin_memory=True
+                          pin_memory=self.pin_memory,
+                          persistent_workers=self.persistent_workers
                           )
