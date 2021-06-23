@@ -6,34 +6,39 @@ import traceback
 from numpy import asarray
 from albumentations import CenterCrop
 from tqdm.contrib.concurrent import process_map
-# import numpy as np
+import numpy as np
+import shutil
 
 # Load metadata etc
-filenames_and_labels = r'C:\Users\Rodney\PycharmProjects\Thesis_cur-AI-tor\notebooks\data\saatchi_targets.csv'
-image_input_folder = r'C:\Users\Rodney\Desktop\saatchi\portrait512\portrait512'
-image_output_folder = r'E:\temp\thesisdata\saatchi_portrait_cond128'
+filenames_and_labels = 'saatchi_micro_umap_hdbscan_clustering_test.csv'
+target_column_name = 'class'
+image_input_folder = r'E:\temp\thesisdata\saatchi\micro_dataset1'
+image_output_folder = r'E:\temp\thesisdata\umap_hdsbscan_test1'
+resize_and_crop_ = False
 size_ = 128
 image_count_per_class = 1000000
 
 cropper = CenterCrop(height=size_, width=size_)
 
 # Load target data
-targets_df = pd.read_csv(filenames_and_labels, header=None)
-targets_df.columns = ['FILENAME', 'PRICE', 'LIKES_VIEWS_RATIO']
-# Bin the values
-targets_df['PRICE_BIN_IDX'] = pd.qcut(targets_df['PRICE'], q=5, labels=[0, 1, 2, 3, 4])
-targets_df['LIKES_VIEWS_RATIO_BIN_IDX'] = pd.qcut(targets_df['LIKES_VIEWS_RATIO'], q=5, labels=[0, 1, 2, 3, 4])
-targets_df = targets_df.astype({'PRICE_BIN_IDX': int, 'LIKES_VIEWS_RATIO_BIN_IDX': int})
-targets_df.drop(['PRICE', 'LIKES_VIEWS_RATIO'], axis=1, inplace=True)
-targets_df.set_index('FILENAME', inplace=True)
-targets_df.drop('PRICE_BIN_IDX', axis=1, inplace=True)
-targets_df = pd.DataFrame(targets_df.reset_index().drop_duplicates(subset=['FILENAME'])).set_index('FILENAME')
+targets_df = pd.read_csv(filenames_and_labels, index_col=0)
+
+# Remove unnecessary columns
+for col in targets_df.columns:
+    if col != target_column_name:
+        targets_df.drop(col, axis=1, inplace=True)
+
+# Remove duplicates
+targets_df = pd.DataFrame(targets_df.reset_index().
+                          drop_duplicates(subset=['index'])).\
+                          set_index('index')
 
 
 def resize_pad_crop_image(input_path: str,
                           output_path: str,
                           desired_size: int,
-                          mode: str):
+                          mode: str,
+                          ):
     input_path_ = Path(input_path)
     output_path_ = Path(output_path)
 
@@ -79,9 +84,13 @@ def resize_pad_crop_image(input_path: str,
             img.save(full_output_path)
         except (OSError, IOError):
             print(f'Opening image failed: \n {traceback.format_exc()}')
+    elif mode == 'move':
+        full_output_path = output_path_ / filename
+        shutil.move(input_path, full_output_path)
 
 
-label_folder_list = [0, 1, 2, 3, 4]
+# Create list with unique class labels
+label_folder_list = list(np.unique(targets_df[target_column_name].values))
 counter = {k: 0 for k in label_folder_list}
 
 # Create the folders
@@ -97,10 +106,10 @@ def run(file):
             return
         else:
             filename = Path(file).name
-            label = targets_df.loc[filename]['LIKES_VIEWS_RATIO_BIN_IDX']
+            label = targets_df.loc[filename][target_column_name]
             if counter[label] < image_count_per_class:
                 image_output_folder_with_label = image_output_folder + '\\' + str(label)
-                resize_pad_crop_image(file, image_output_folder_with_label, size_, mode='crop')
+                resize_pad_crop_image(file, image_output_folder_with_label, size_, mode='move')
                 counter.update({label: counter[label] + 1})
     except KeyError:
         print(f'Label not found for file {file}, skipping!')
@@ -112,4 +121,4 @@ def run(file):
 
 if __name__ == '__main__':
     filelist = glob.glob(image_input_folder + '*/*')
-    r = process_map(run, filelist, max_workers=9, chunksize=10)
+    r = process_map(run, filelist, max_workers=2, chunksize=10)
