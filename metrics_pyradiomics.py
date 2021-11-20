@@ -32,7 +32,7 @@ def tile_image(img, n_blocks=(3, 3)):
 
 def split_image_rgb(image):
     # Channel order: R, G, B
-    return np.dsplit(image,image.shape[-1])
+    return np.dsplit(image, image.shape[-1])
 
 
 def split_image_lab(image):
