@@ -10,10 +10,11 @@ import numpy as np
 import shutil
 
 # Load metadata etc
-filenames_and_labels = 'saatchi_micro_umap_hdbscan_clustering_test.csv'
+filenames_and_labels = r"C:\Users\Rodney\PycharmProjects\Thesis_cur-AI-tor\notebooks\portrait_cc_14_r23n23.lisa.surfsara.nl_48373_(960, 40, 'euclidean', 1, 100).csv"
 target_column_name = 'class'
-image_input_folder = r'E:\temp\thesisdata\saatchi\micro_dataset1'
-image_output_folder = r'E:\temp\thesisdata\umap_hdsbscan_test1'
+image_input_folder = r'C:\Users\Rodney\Desktop\saatchi\saatchi'
+# image_input_folder = r'E:\temp\thesisdata\micro_dataset1'
+image_output_folder = r'C:\Users\Rodney\Desktop\saatchi\umap_hdsbscan_test_portrait_(960, 40, euclidean, 1, 100)_res'
 resize_and_crop_ = False
 size_ = 128
 image_count_per_class = 1000000
@@ -86,7 +87,7 @@ def resize_pad_crop_image(input_path: str,
             print(f'Opening image failed: \n {traceback.format_exc()}')
     elif mode == 'move':
         full_output_path = output_path_ / filename
-        shutil.move(input_path, full_output_path)
+        shutil.copy(input_path, full_output_path)
 
 
 # Create list with unique class labels
@@ -112,7 +113,8 @@ def run(file):
                 resize_pad_crop_image(file, image_output_folder_with_label, size_, mode='move')
                 counter.update({label: counter[label] + 1})
     except KeyError:
-        print(f'Label not found for file {file}, skipping!')
+        # print(f'Label not found for file {file}, skipping!')
+        pass
     except OSError:
         if filename is None:
             filename = file

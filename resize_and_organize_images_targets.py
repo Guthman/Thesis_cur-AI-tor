@@ -10,8 +10,8 @@ from tqdm.contrib.concurrent import process_map
 
 # Load metadata etc
 filenames_and_labels = r'C:\Users\Rodney\PycharmProjects\Thesis_cur-AI-tor\notebooks\data\saatchi_targets.csv'
-image_input_folder = r'C:\Users\Rodney\Desktop\saatchi\portrait512\portrait512'
-image_output_folder = r'E:\temp\thesisdata\saatchi_portrait_cond128'
+image_input_folder = r'C:\Users\Rodney\Desktop\saatchi\saatchi_portrait128_curated'
+image_output_folder = r'E:\temp\thesisdata\saatchi_portrait128_curated'
 size_ = 128
 image_count_per_class = 1000000
 
